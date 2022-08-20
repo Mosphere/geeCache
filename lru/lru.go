@@ -1,12 +1,14 @@
 package lru
 
-import "container/list"
+import (
+	"container/list"
+)
 
 type Cache struct {
 	maxBytes  int64
 	nBytes    int64
 	ll        *list.List //doubly linked list
-	cache     map[string]*list.Element
+	elements  map[string]*list.Element
 	OnEvicted func(key string, val Value)
 }
 
@@ -23,13 +25,13 @@ func New(max int64, evicted func(key string, val Value)) *Cache {
 	return &Cache{
 		maxBytes:  max,
 		ll:        list.New(),
-		cache:     make(map[string]*list.Element),
+		elements:  make(map[string]*list.Element),
 		OnEvicted: evicted,
 	}
 }
 
 func (c *Cache) Get(key string) (Value, bool) {
-	if ele, ok := c.cache[key]; ok {
+	if ele, ok := c.elements[key]; ok {
 		c.ll.MoveToFront(ele)
 		kv := ele.Value.(*entry)
 		return kv.value, true
@@ -42,7 +44,7 @@ func (c *Cache) Remove() {
 	if ele != nil {
 		kv := ele.Value.(*entry) //方便通过key删除
 		c.ll.Remove(ele)
-		delete(c.cache, kv.key)
+		delete(c.elements, kv.key)
 		c.nBytes -= int64(len(kv.key) + kv.value.Len())
 		if c.OnEvicted != nil {
 			c.OnEvicted(kv.key, kv.value)
@@ -51,14 +53,14 @@ func (c *Cache) Remove() {
 }
 
 func (c *Cache) Add(key string, val Value) {
-	if ele, ok := c.cache[key]; ok {
+	if ele, ok := c.elements[key]; ok {
 		c.ll.MoveToFront(ele)
 		kv := ele.Value.(*entry)
 		nBytes := int64(len(kv.key) + kv.value.Len())
 		c.nBytes += nBytes
 	} else {
 		ele := c.ll.PushFront(&entry{key, val})
-		c.cache[key] = ele
+		c.elements[key] = ele
 		c.nBytes += int64(len(key) + val.Len())
 	}
 
